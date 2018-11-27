@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+ 
+    <!-- 格式化输出：%date表示日期，%thread表示线程名，%p：级别, %m：日志消息，%n是换行符-->
+    <property name="LOG_PATTERN" value="%d [%t] [%p] %logger{32}\\(Line:%L\\) - %m%n" />
+ 
+    <!-- 控制台输出日志 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <!-- 按照上面配置的LOG_PATTERN来打印日志 -->
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+ 
+    <!--每天生成一个日志文件，保存30天的日志文件。rollingFile是用来切分文件的 -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/cluster-keeper.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/cluster-keeper.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <!-- 日志保留三十天 -->
+            <maxHistory>30</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+    <!-- 级别从小到达：ERROR、WARN、INFO、DEBUG -->
+    <root level="INFO">                                 
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="FILE" />
+    </root>
+</configuration>

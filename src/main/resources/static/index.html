@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>Cluster-Keeper</title>
+
+    <link href="css/bootstrap.min.css" rel="stylesheet"/>
+    <style>
+        html, body{
+            font-size: 15px;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .header{
+            background-color: #607D8B;
+            color: #fff;
+            font-size: 20px;
+            font-weight: bold;
+            padding: 8px;
+        }
+        
+        #container_node{
+            padding: 8px;
+        }
+        
+        .ball{
+            width: 14px;
+            height: 14px;
+            border-radius: 7px;
+            margin-top: 4px;
+        }
+        
+        .ball.green{
+            background-color: #0cc70c;
+        }
+        .ball.red{
+            background-color: red;
+        }
+        
+        .master_mark{
+            float: right;
+            color: yellow;
+        }
+        
+        .table_node{
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-bottom: 0;
+        }
+        
+        .table_node .col{
+            padding: 4px 8px;
+            word-break: break-all;
+            border-bottom: 1px solid #ccc;
+        }
+        
+        .table_node .col:nth-child(odd){
+            
+        }
+        
+        .table_node td:nth-child(2){
+            
+        }
+        
+        .table_node.master{
+            
+        }
+        
+        .table_node.offline{
+            color: #777;
+        }
+        
+        .table_node .row:first-child{
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        .table_node.offline .row:first-child{
+            background-color: #eee;
+        }
+        
+        .table_node.online .row:first-child {
+            background-color: #009688;
+            color: #fff;
+        }
+
+        .table_node.online .row:first-child a {
+            color: #fff;
+        }
+
+        .ta_event{
+            width: 100%;
+            height: 60px;
+            border: 0;
+            font-size: 12px;
+            font-family: inherit;
+            resize: vertical;
+            color: #f00;
+            word-break: break-all;
+        }
+
+        .list_nodes.error{
+            color: #FF9800;
+        }
+
+        .list_nodes.error .tip{
+            display: inline-block;
+            width: 14px;
+            text-align: center;
+            color: #fff;
+            background-color: #FF9800;
+            margin-right: 4px;
+            border-radius: 2px;
+            cursor: pointer;
+        }
+    </style>
+
+    <script src="js/jquery-3.3.1.min.js"></script>
+    <script src="js/bootstrap.min.js"></script>
+    <script>
+        function getClusterStatus(f_success, f_error){
+            $.ajax({
+                method: "GET",
+                url: "/proxy/cluster/status?cache=true&_="+Math.random(),
+                success: function(data){
+                    if(f_success){
+                        f_success(data);
+                    }
+                },
+                error: function(){
+                    if(f_error){
+                        f_error();
+                    }
+                }
+            })
+        }
+        
+        function buildNodeTable(ip, nodeId, runningStatus, systemPerf, available, master,
+                                lastStartMasterTime, notAvailableEvents, nodeList){
+            var status_class = runningStatus == 'OFFLINE' ? 'offline' : 'online';
+            var master_class = master ? 'master' : '';
+            var table = $("<div class='container-fluid table_node "+status_class+" "+master_class+"'></div>");
+            var row_ip = $("<div class='row'>\
+                                <div class='col'>"+(master?"主":"备")+"节点："+ip + (master?"<div class='master_mark'>★</div>":"") +"</div>\
+                            </div>");
+            
+            var row_id = $("<div class='row'>\
+                                <div class='col'>节点ID：</div><div class='col'>"+nodeId+"</div>\
+                                <div class='col'>节点列表配置：</div><div class='col list_nodes'>"+(nodeList?nodeList.join(','):'')+"</div>\
+                                <div class='col'>最后一次切换为主节点时间：</div><div class='col'>"+(lastStartMasterTime?lastStartMasterTime:"")+"</div>\
+                            </div>");
+            
+            var perf = "";
+            if(systemPerf){
+                perf += "<div class='col'>CPU使用率：</div><div class='col'>" + (systemPerf['cpuLoad'] * 100).toFixed(2) + "%</div>";
+                perf += "<div class='col'>内存使用率：</div><div class='col'>" + (100 - systemPerf['memoryFreeBytes'] / systemPerf['memoryTotalBytes'] * 100).toFixed(2) + "%</div>";
+                perf += "<div class='col'>磁盘使用率：</div><div class='col'>" + (100 - systemPerf['diskFreeBytes'] / systemPerf['diskTotalBytes'] * 100).toFixed(2) + "%</div>";
+            }
+            var row_perf = perf ? $("<div class='row'>"+perf+"</div>") : "";
+            
+            var row_status = $("<div class='row'>\
+                                    <div class='col'>运行状态：</div><div class='col'>"+runningStatus+"</div>\
+                                    <div class='col'>主节点：</div><div class='col'>"+(master?'是':'否')+"</div>\
+                                    <div class='col'>可用性：</div><div class='col'><div class='ball "+(available?'green':'red')+"'></div></div>\
+                                </div>");
+
+            var events = "";
+            if(notAvailableEvents){
+                events = notAvailableEvents.join('\n');
+            }
+            row_events = $("<div class='row'><div class='col col-2'>异常事件：</div><div class='col'><textarea class='ta_event' readonly></textarea></div></div>");
+            row_events.find('textarea').val(events);
+
+            table.append(row_ip);
+            table.append(row_status);
+            table.append(row_perf);
+            table.append(row_id);
+            table.append(row_events);
+
+            return table;
+        }
+
+        function checkNodeListSame(data){
+            if(!data || data.length == 0){
+                return true;
+            }
+
+            var v0 = null;
+            for(var ip in data){
+                var node = data[ip];
+                var status = node.runningStatus;
+                if(!status || status == 'OFFLINE'){
+                    continue;
+                }
+
+                var list = node.nodeList;
+                if(!list){
+                    list = []
+                }
+
+                var v = list.sort().join(',');
+
+                if(v0 === null){
+                    v0 = v;
+                }
+
+                if(v != v0){
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        function load(){
+            getClusterStatus(function(data){
+                $('#container_node').empty()
+
+                for(var ip in data){
+                    var node = data[ip];
+                    var table = buildNodeTable(ip, node.nodeId,
+                                                   node.runningStatus,
+                                                   node.systemPerf,
+                                                   node.available,
+                                                   node.master,
+                                                   node.lastStartMasterTime,
+                                                   node.notAvailableEvents,
+                                                   node.nodeList);
+                    $('#container_node').append(table);
+                }
+
+                if(!checkNodeListSame(data)){
+                    $('.table_node.online .list_nodes').addClass('error');
+                    $('.table_node.online .list_nodes').prepend('<span class="tip" title="节点列表配置不一致">!</span>')
+                }
+            }, function(){
+                $('#container_node').empty()
+            });
+        }
+
+        $(function(){
+            load();
+            setInterval(function(){
+                load()
+            }, 10000);
+        });
+    </script>
+</head>
+<body>
+    <div class="header">Cluster-Keeper</div>
+    <div id="container_node"></div>
+</body>
+</html>
